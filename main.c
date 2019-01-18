@@ -12,6 +12,9 @@ void set_process_title();
 // 子进程数量
 const int worker_num = 4;
 
+// 环境变量数组 
+extern ** environ;
+
 int main( int argc, char * argv[] ) {
 
     
