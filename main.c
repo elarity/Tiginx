@@ -2,7 +2,11 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include <string.h>
 #include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 
 // 定义信号处理函数
 void signal_handler( int );
@@ -13,10 +17,9 @@ void set_process_title();
 const int worker_num = 4;
 
 // 环境变量数组 
-extern ** environ;
+extern char ** environ;
 
 int main( int argc, char * argv[] ) {
-
     
   /*
   for ( int i = 0; NULL != argv[ i ]; i++ ) {
@@ -33,6 +36,49 @@ int main( int argc, char * argv[] ) {
   struct sigaction sa_struct;
   sa_struct.sa_flags   = SA_RESTART;
   sa_struct.sa_handler = signal_handler;
+  // 
+  int listen_socket; 
+  int connect_socket;
+  int socket_option_value;
+  socklen_t socket_length;
+  struct sockaddr_in listen_socket_addr;
+  struct sockaddr_in connect_socket_addr;
+  char buffer[ 4096 ];
+  
+  // 创建监听socket  
+  listen_socket = socket( AF_INET, SOCK_STREAM, 0 );
+  if ( -1 == listen_socket ) {
+    printf( "create listen socket error.\n" );
+    exit( -1 );
+  }
+  socket_option_value = 1;
+  setsockopt( listen_socket, SOL_SOCKET, SO_REUSEADDR, &socket_option_value, sizeof( int ) );
+  memset( &listen_socket_addr, 0, sizeof( struct sockaddr_in ) );
+  listen_socket_addr.sin_family = AF_INET; 
+  listen_socket_addr.sin_port   = htons( 6666 ); 
+  listen_socket_addr.sin_addr.s_addr = htonl( INADDR_ANY );
+  if ( -1 == bind( listen_socket, ( struct sockaddr * )&listen_socket_addr, sizeof( listen_socket_addr ) ) ) {
+    printf( "bind socket error.\n" );
+    exit( -1 );
+  }
+  if ( -1 == listen( listen_socket, 128 ) ) {
+    printf( "listen socket error.\n" );
+    exit( -1 );
+  } 
+  while ( 1 ) {
+    connect_socket = accept( listen_socket, ( struct sockaddr * )&connect_socket_addr, &socket_length );
+    if ( -1 == connect_socket ) {
+      printf( "accpet socket error.\n" );
+      exit( -1 );
+    }
+    recv( connect_socket, &buffer, 4096, 0 ); 
+    printf( "%s\n", buffer ); 
+    char msg[ 4096 ] = "hello,nihao";
+    send( connect_socket, &msg, 4096, 0 );
+    close( connect_socket );
+  } 
+  close( listen_socket );
+  return 0;
  
   // fork子进程
   for ( int i = 0; i < worker_num; i++ ) {
