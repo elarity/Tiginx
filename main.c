@@ -7,6 +7,9 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include "src/core/cJSON.h"
+
+#define MAXBUFFER 8192
 
 // 定义信号处理函数
 void signal_handler( int );
@@ -14,7 +17,8 @@ void signal_handler( int );
 void set_process_title();
 
 // 子进程数量
-const int worker_num = 4;
+int worker_num = 4;
+int port       = 6666;
 
 // 环境变量数组 
 extern char ** environ;
@@ -29,22 +33,50 @@ int main( int argc, char * argv[] ) {
   //printf( "%p\n", argv[ 0 ] ); 
   char * process_title = argv[ 0 ];
   
+  // 声明信号以及子进程相关变量和结构体
   pid_t pid;
-  // 用child_pid数组用来保存子进程的进程id
   pid_t child_pid[ worker_num ];
-  // 声明sigaction-struct结构体变量
   struct sigaction sa_struct;
   sa_struct.sa_flags   = SA_RESTART;
   sa_struct.sa_handler = signal_handler;
-  // 
+  //  声明socket相关变量 和 结构体
   int listen_socket; 
   int connect_socket;
   int socket_option_value;
   socklen_t socket_length;
   struct sockaddr_in listen_socket_addr;
   struct sockaddr_in connect_socket_addr;
-  char buffer[ 4096 ];
+  char buffer[ MAXBUFFER ];
+  // 声明配置文件路径
+  int  file_size;  // bytes
+  FILE * conf_file_fp;
+  char * conf_file = "./conf/tiginx.conf";
+  char * conf_content;
+  cJSON * conf_content_root;
+  // 声明配置项目相关变量
+  cJSON * conf_port;
+  cJSON * conf_worker_num;
   
+  // 解析配置文件
+  conf_file_fp = fopen( conf_file, "r" );  
+  if ( !conf_file_fp ) {
+    printf( "open file error.\n" );
+    exit( -1 );
+  }
+  fseek( conf_file_fp, 0, SEEK_END ); 
+  file_size = ftell( conf_file_fp );
+  rewind( conf_file_fp );
+  conf_content = ( char * )malloc( 10000 );   
+  memset( conf_content, 0, sizeof( conf_content ) );
+  fread( conf_content, sizeof( char ), file_size, conf_file_fp );
+  free( conf_content );
+  fclose( conf_file_fp );
+  conf_content_root = cJSON_Parse( conf_content ); 
+  conf_port       = cJSON_GetObjectItem( conf_content_root, "port" );
+  conf_worker_num = cJSON_GetObjectItem( conf_content_root, "worker_num" );
+  //printf( "%d\n", conf_worker_num->valueint );   
+  port       = conf_port->valueint;
+  worker_num = conf_worker_num->valueint; 
   // 创建监听socket  
   listen_socket = socket( AF_INET, SOCK_STREAM, 0 );
   if ( -1 == listen_socket ) {
@@ -55,7 +87,7 @@ int main( int argc, char * argv[] ) {
   setsockopt( listen_socket, SOL_SOCKET, SO_REUSEADDR, &socket_option_value, sizeof( int ) );
   memset( &listen_socket_addr, 0, sizeof( struct sockaddr_in ) );
   listen_socket_addr.sin_family = AF_INET; 
-  listen_socket_addr.sin_port   = htons( 6666 ); 
+  listen_socket_addr.sin_port   = htons( port ); 
   listen_socket_addr.sin_addr.s_addr = htonl( INADDR_ANY );
   if ( -1 == bind( listen_socket, ( struct sockaddr * )&listen_socket_addr, sizeof( listen_socket_addr ) ) ) {
     printf( "bind socket error.\n" );
@@ -65,20 +97,22 @@ int main( int argc, char * argv[] ) {
     printf( "listen socket error.\n" );
     exit( -1 );
   } 
+  /*
   while ( 1 ) {
     connect_socket = accept( listen_socket, ( struct sockaddr * )&connect_socket_addr, &socket_length );
     if ( -1 == connect_socket ) {
       printf( "accpet socket error.\n" );
       exit( -1 );
     }
-    recv( connect_socket, &buffer, 4096, 0 ); 
+    recv( connect_socket, &buffer, MAXBUFFER, 0 ); 
     printf( "%s\n", buffer ); 
-    char msg[ 4096 ] = "hello,nihao";
-    send( connect_socket, &msg, 4096, 0 );
+    char msg[ MAXBUFFER ] = "hello,nihao";
+    send( connect_socket, &msg, MAXBUFFER, 0 );
     close( connect_socket );
   } 
   close( listen_socket );
   return 0;
+  */
  
   // fork子进程
   for ( int i = 0; i < worker_num; i++ ) {
@@ -90,8 +124,14 @@ int main( int argc, char * argv[] ) {
     }
     // 在子进程中.
     else if ( 0 == pid ) {
-      sleep( 10 );
-      exit( -1 );
+      //sleep( 10 );
+      //exit( -1 );
+      while ( 1 ) {
+        connect_socket = accept( listen_socket, ( struct sockaddr * )&connect_socket_addr, &socket_length ); 
+        recv( connect_socket, &buffer, MAXBUFFER, 0 );
+        printf( "进程%d : %s", getpid(), buffer );
+        close( connect_socket );
+      }
     }
     // 在父进程中.
     else if ( 0 < pid ) {
