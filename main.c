@@ -72,6 +72,7 @@ int main( int argc, char * argv[] ) {
   // 解析配置文件
   worker_dir = getcwd( NULL, 0 ); 
   full_conf_file = ( char * )malloc( sizeof( worker_dir ) + sizeof( conf_file ) + 50 );
+  bzero(full_conf_file, sizeof( worker_dir ) + sizeof( conf_file ) + 50);
   strcat( full_conf_file, worker_dir );
   free( worker_dir );
   strcat( full_conf_file, conf_file );
