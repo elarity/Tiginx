@@ -10,9 +10,11 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/select.h>
 #include "src/core/cJSON.h"
 
 #define MAXBUFFER 8192
+#define MAX_FD_SIZE 1024
 
 // 定义信号处理函数
 void signal_handler( int );
@@ -41,39 +43,44 @@ int main( int argc, char * argv[] ) {
   sa_struct.sa_flags   = SA_RESTART;
   sa_struct.sa_handler = signal_handler;
   //  声明socket相关变量 和 结构体
-  int listen_socket; 
-  int connect_socket;
+  int listen_socket_fd; 
+  int connect_socket_fd;
   int socket_option_value;
   socklen_t socket_length;
   struct sockaddr_in listen_socket_addr;
   struct sockaddr_in connect_socket_addr;
   char buffer[ MAXBUFFER ];
+  // 声明select相关变量
+  fd_set temp_fd;
+  fd_set read_fd; 
+  int affected_fd_num;
+  int max_fd_num; 
+  int client_array[ MAX_FD_SIZE ];
+  struct timeval timeout;
 
-  // daemonize化
-  //daemonize();
-
+  // 解析json配置文件
   parse_conf_file();
   
   if ( 1 == daemonize ) {
     be_daemon();
   }
   // 创建监听socket  
-  listen_socket = socket( AF_INET, SOCK_STREAM, 0 );
-  if ( -1 == listen_socket ) {
+  listen_socket_fd = socket( AF_INET, SOCK_STREAM, 0 );
+  if ( -1 == listen_socket_fd ) {
     printf( "create listen socket error.\n" );
     exit( -1 );
   }
   socket_option_value = 1;
-  setsockopt( listen_socket, SOL_SOCKET, SO_REUSEADDR, &socket_option_value, sizeof( int ) );
+  setsockopt( listen_socket_fd, SOL_SOCKET, SO_REUSEADDR, &socket_option_value, sizeof( int ) );
   memset( &listen_socket_addr, 0, sizeof( struct sockaddr_in ) );
   listen_socket_addr.sin_family = AF_INET; 
   listen_socket_addr.sin_port   = htons( port ); 
   listen_socket_addr.sin_addr.s_addr = htonl( INADDR_ANY );
-  if ( -1 == bind( listen_socket, ( struct sockaddr * )&listen_socket_addr, sizeof( listen_socket_addr ) ) ) {
+  if ( -1 == bind( listen_socket_fd, ( struct sockaddr * )&listen_socket_addr, sizeof( listen_socket_addr ) ) ) {
     printf( "bind socket error.\n" );
     exit( -1 );
   }
-  if ( -1 == listen( listen_socket, 128 ) ) {
+  if ( -1 == listen( listen_socket_fd, 128 ) ) {
     printf( "listen socket error.\n" );
     exit( -1 );
   } 
@@ -88,11 +95,91 @@ int main( int argc, char * argv[] ) {
     }
     // 在子进程中.
     else if ( 0 == pid ) {
+
+      /*
       while ( 1 ) {
+        connect_socket_fd = accept( listen_socket_fd, ( struct sockaddr * )&connect_socket_addr, &socket_length ); 
+        recv( connect_socket_fd, &buffer, MAXBUFFER, 0 );
+        printf( "进程%d : %s", getpid(), buffer );
+        close( connect_socket_fd );
+      } 
+      */
+
+      // BEGIN ----- select ----- BEGIN
+      timeout.tv_sec  = 2;
+      timeout.tv_usec = 0;
+      for ( int i = 0; i < MAX_FD_SIZE; i++ ) {
+        client_array[ i ] = -1;
+      }
+      // 首先清空read_fd和temp_fd，其次将listen_socket_fd加入到read_fd中
+      FD_ZERO( &read_fd );
+      FD_ZERO( &temp_fd );
+      FD_SET( listen_socket_fd, &read_fd ); 
+      max_fd_num = listen_socket_fd + 1; 
+      while ( 1 ) {
+        //printf( "max_fd_num : %d , loop.\n", max_fd_num );
+        temp_fd = read_fd;
+        // 每个子进程中维护一个select多路复用器
+        //affected_fd_num = select( listen_socket_fd, &temp_fd, NULL, NULL, &timeout ); 
+        affected_fd_num = select( max_fd_num, &temp_fd, NULL, NULL, NULL ); 
+        printf( "affeceted_fd_num : %d\n", affected_fd_num );
+        if ( -1 == affected_fd_num ) {
+ 	  printf( "select error.\n" );
+	  exit( -1 );
+	}
+	// 如果有发生变化的fd
+  	if ( 0 < affected_fd_num ) {
+          // 首先listen_socket_fd是否属于变化的fd，如果是，动作应该为accept 
+ 	  if ( FD_ISSET( listen_socket_fd, &temp_fd ) ) {
+	    //printf( "accept connect.\n" );
+	    socket_length = sizeof( connect_socket_addr );
+	    connect_socket_fd = accept( listen_socket_fd, ( struct sockaddr * )&connect_socket_addr, &socket_length );
+ 	    FD_SET( connect_socket_fd, &read_fd );
+	    for ( int i = 0; i < MAX_FD_SIZE; i++ ) {
+	      if ( -1 == client_array[ i ] ) {
+	        if ( i <= ( MAX_FD_SIZE - 1 ) ) {
+                  printf( "accept : %d\n", i );
+                  max_fd_num++; 
+                  client_array[ i ] = connect_socket_fd; 
+		  break;
+		}
+	      }
+	    } 
+ 	  }
+          // 如果不是listen_socket_fd，那么动作应该为recv/send
+	  else {
+	    printf( "recv read.\n" );
+            // 先用傻逼轮训办法读取
+ 	    for ( int i = 0; i < MAX_FD_SIZE; i++ ) {
+	      connect_socket_fd = client_array[ i ];
+ 	      if ( 0 < connect_socket_fd && FD_ISSET( connect_socket_fd, &temp_fd ) ) {
+	        recv( connect_socket_fd, buffer, MAXBUFFER, 0 );	
+ 		printf( "%s\n", buffer );
+	        close( connect_socket_fd );
+		FD_CLR( connect_socket_fd, &read_fd );
+ 		client_array[ i ] = -1;
+  	      } 
+	      else {
+		continue;
+	      }
+	    }
+	  }
+	}
+	// 如果没有任何发生变化的fd
+        else if ( 0 == affected_fd_num ) {
+	  sleep( 1 );
+ 	  continue;
+        }
+        // END ---- select ---- END
+
+
+        // 下面注释的四行是原来的accept逻辑
+ 	/*
         connect_socket = accept( listen_socket, ( struct sockaddr * )&connect_socket_addr, &socket_length ); 
         recv( connect_socket, &buffer, MAXBUFFER, 0 );
         printf( "进程%d : %s", getpid(), buffer );
         close( connect_socket );
+	*/
       }
     }
     // 在父进程中.
