@@ -29,14 +29,9 @@ int daemonize  = 0;
 // 环境变量数组 
 extern char ** environ;
 
+static void parse_conf_file(void);
+
 int main( int argc, char * argv[] ) {
-    
-  /*
-  for ( int i = 0; NULL != argv[ i ]; i++ ) {
-    printf( "%p : %s\n", argv[ i ], argv[ i ] );
-  }
-  */
-  //printf( "%p\n", argv[ 0 ] ); 
   char * process_title = argv[ 0 ];
   
   // 声明信号以及子进程相关变量和结构体
@@ -53,51 +48,12 @@ int main( int argc, char * argv[] ) {
   struct sockaddr_in listen_socket_addr;
   struct sockaddr_in connect_socket_addr;
   char buffer[ MAXBUFFER ];
-  // 声明配置文件路径
-  int  file_size;  // bytes
-  FILE * conf_file_fp;
-  char * worker_dir = NULL;
-  char * conf_file = "/conf/tiginx.conf";
-  char * full_conf_file = NULL;
-  char * conf_content;
-  cJSON * conf_content_root;
-  // 声明配置项目相关变量
-  cJSON * conf_port;
-  cJSON * conf_worker_num;
-  cJSON * conf_daemonize;
 
   // daemonize化
   //daemonize();
+
+  parse_conf_file();
   
-  // 解析配置文件
-  worker_dir = getcwd( NULL, 0 ); 
-  full_conf_file = ( char * )malloc( sizeof( worker_dir ) + sizeof( conf_file ) + 50 );
-  bzero(full_conf_file, sizeof( worker_dir ) + sizeof( conf_file ) + 50);
-  strcat( full_conf_file, worker_dir );
-  free( worker_dir );
-  strcat( full_conf_file, conf_file );
-  conf_file_fp = fopen( full_conf_file, "r" );  
-  free( full_conf_file );
-  if ( !conf_file_fp ) {
-    printf( "open file error.\n" );
-    exit( -1 );
-  }
-  fseek( conf_file_fp, 0, SEEK_END ); 
-  file_size = ftell( conf_file_fp );
-  rewind( conf_file_fp );
-  conf_content = ( char * )malloc( file_size );   
-  memset( conf_content, 0, sizeof( conf_content ) );
-  fread( conf_content, sizeof( char ), file_size, conf_file_fp );
-  fclose( conf_file_fp );
-  conf_content_root = cJSON_Parse( conf_content ); 
-  conf_port       = cJSON_GetObjectItem( conf_content_root, "port" );
-  conf_worker_num = cJSON_GetObjectItem( conf_content_root, "worker_num" );
-  conf_daemonize  = cJSON_GetObjectItem( conf_content_root, "daemonize" );
-  //printf( "%d\n", conf_worker_num->valueint );   
-  port       = conf_port->valueint;
-  worker_num = conf_worker_num->valueint; 
-  daemonize  = conf_daemonize->valueint; 
-  free( conf_content );
   if ( 1 == daemonize ) {
     be_daemon();
   }
@@ -132,8 +88,6 @@ int main( int argc, char * argv[] ) {
     }
     // 在子进程中.
     else if ( 0 == pid ) {
-      //sleep( 10 );
-      //exit( -1 );
       while ( 1 ) {
         connect_socket = accept( listen_socket, ( struct sockaddr * )&connect_socket_addr, &socket_length ); 
         recv( connect_socket, &buffer, MAXBUFFER, 0 );
@@ -143,7 +97,6 @@ int main( int argc, char * argv[] ) {
     }
     // 在父进程中.
     else if ( 0 < pid ) {
-      //printf( "fork.\n" );
       child_pid[ i ] = pid; 
     }
   }
@@ -151,27 +104,10 @@ int main( int argc, char * argv[] ) {
   // 为主进程安装信号管理器
   sigaction( SIGCHLD, &sa_struct, NULL );
 
-  // 主进程要回收子进程，防止僵尸进程.
-  //while ( 1 ) {
-    //sleep( 1 );
-    //for ( int i = 0; i < worker_num; i++ ) {
-      //int wait_status_value;
-      //waitpid( child_pid[ i ], &wait_status_value, WNOHANG );
-      //if (WIFEXITED(stat_val))//正常退出
-      //if (WIFSIGNALED(stat_val))//查看被什么信号关闭
-    //}
-  //}
-  //sleep( 1000000 );
   while ( 1 ) {
     sleep( 1 );
   }
 
-  /*
-  int worker_num_total = sizeof( child_pid ) / sizeof( pid_t );
-  for ( int i = 0; i < worker_num_total ; i++ ) {
-    printf( "%d\n", child_pid[ i ] );
-  } 
-  */
   return 0;
 }
 
@@ -232,4 +168,49 @@ void be_daemon() {
   //fd1 = dup( 0 );
   //fd2 = dup( 0 );
   //printf( "daemonize over\n" );
+}
+
+static void parse_conf_file(void)
+{
+  // 声明配置文件路径
+  int  file_size;  // bytes
+  FILE * conf_file_fp;
+  char * worker_dir = NULL;
+  char * conf_file = "/conf/tiginx.conf";
+  char * full_conf_file = NULL;
+  char * conf_content;
+  cJSON * conf_content_root;
+  // 声明配置项目相关变量
+  cJSON * conf_port;
+  cJSON * conf_worker_num;
+  cJSON * conf_daemonize;
+
+  // 解析配置文件
+  worker_dir = getcwd( NULL, 0 ); 
+  full_conf_file = ( char * )malloc( sizeof( worker_dir ) + sizeof( conf_file ) + 50 );
+  bzero(full_conf_file, sizeof( worker_dir ) + sizeof( conf_file ) + 50);
+  strcat( full_conf_file, worker_dir );
+  free( worker_dir );
+  strcat( full_conf_file, conf_file );
+  conf_file_fp = fopen( full_conf_file, "r" );  
+  free( full_conf_file );
+  if ( !conf_file_fp ) {
+    printf( "open file error.\n" );
+    exit( -1 );
+  }
+  fseek( conf_file_fp, 0, SEEK_END ); 
+  file_size = ftell( conf_file_fp );
+  rewind( conf_file_fp );
+  conf_content = ( char * )malloc( file_size );   
+  memset( conf_content, 0, sizeof( conf_content ) );
+  fread( conf_content, sizeof( char ), file_size, conf_file_fp );
+  fclose( conf_file_fp );
+  conf_content_root = cJSON_Parse( conf_content ); 
+  conf_port       = cJSON_GetObjectItem( conf_content_root, "port" );
+  conf_worker_num = cJSON_GetObjectItem( conf_content_root, "worker_num" );
+  conf_daemonize  = cJSON_GetObjectItem( conf_content_root, "daemonize" );
+  port       = conf_port->valueint;
+  worker_num = conf_worker_num->valueint; 
+  daemonize  = conf_daemonize->valueint; 
+  free( conf_content );
 }
