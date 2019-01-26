@@ -25,7 +25,7 @@ int main( int argc, char * argv[] ) {
   
   // 声明信号以及子进程相关变量和结构体
   pid_t pid;
-  pid_t child_pid[ worker_num ];
+  pid_t * child_pid;
   struct sigaction sa_struct;
   sa_struct.sa_flags   = SA_RESTART;
   sa_struct.sa_handler = signal_handler;
@@ -36,6 +36,12 @@ int main( int argc, char * argv[] ) {
 
   // 解析json配置文件
   parse_conf_file();
+
+  child_pid = (pid_t *)malloc(sizeof(pid_t) * worker_num);
+  if (child_pid == NULL) {
+    printf("malloc error\n");
+    exit( -1 );
+  }
      
   if ( 1 == daemonize ) {
     be_daemon();
@@ -192,7 +198,7 @@ static void parse_conf_file( void ) {
   // 端口
   port       = conf_port->valueint;
   // 子进程数量
-  worker_num = conf_worker_num->valueint; 
+  worker_num = conf_worker_num->valueint;
   // 是否daemon运行
   daemonize  = conf_daemonize->valueint; 
   // 事件模型
