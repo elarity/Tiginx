@@ -184,8 +184,16 @@ static void parse_conf_file( void ) {
   cJSON * conf_daemonize;
   cJSON * conf_event;
   // 解析配置文件
-  worker_dir = getcwd( NULL, 0 ); 
+  worker_dir = getcwd( NULL, 0 );
+  if (worker_dir == NULL) {
+    printf("getcwd error\n");
+    exit(-1);
+  }
   full_conf_file = ( char * )malloc( sizeof( worker_dir ) + sizeof( conf_file ) + 50 );
+  if (full_conf_file == NULL) {
+    printf("malloc error\n");
+    exit(-1);
+  }
   bzero(full_conf_file, sizeof( worker_dir ) + sizeof( conf_file ) + 50);
   strcat( full_conf_file, worker_dir );
   strcat( full_conf_file, conf_file );
@@ -196,8 +204,16 @@ static void parse_conf_file( void ) {
   }
   fseek( conf_file_fp, 0, SEEK_END ); 
   file_size = ftell( conf_file_fp );
+  if (file_size == -1) {
+    printf("ftell error\n");
+    exit(-1);
+  }
   rewind( conf_file_fp );
   conf_content = ( char * )malloc( file_size );   
+  if (conf_content == NULL) {
+    printf("malloc error\n");
+    exit(-1);
+  }
   memset( conf_content, 0, sizeof( conf_content ) );
   fread( conf_content, sizeof( char ), file_size, conf_file_fp );
   conf_content_root = cJSON_Parse( conf_content ); 
@@ -213,6 +229,11 @@ static void parse_conf_file( void ) {
   daemonize  = conf_daemonize->valueint; 
   // 事件模型
   event = ( char * )malloc( sizeof( conf_event->valuestring ) );
+  if (event == NULL) {
+    printf("malloc error\n");
+    exit( -1 );
+  }
+  bzero( event, sizeof( conf_event->valuestring ));
   strcpy( event, conf_event->valuestring );
   free( worker_dir );
   free( full_conf_file );
