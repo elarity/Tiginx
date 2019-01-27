@@ -10,6 +10,7 @@ void be_daemon();
 static void parse_conf_file( void );
 // select-loop
 void select_loop( int );
+extern void epoll_loop( int );
 
 // 子进程数量
 int worker_num = 4;
@@ -77,7 +78,16 @@ int main( int argc, char * argv[] ) {
     }
     // 在子进程中.
     else if ( 0 == pid ) {
-      select_loop( listen_socket_fd );
+      if ( 0 == strcmp( "select", event ) ) {
+        select_loop( listen_socket_fd );
+      }
+      else if ( 0 == strcmp( "epoll", event ) ) {
+        epoll_loop( listen_socket_fd );
+      }
+      else {
+        printf( "event loop : select , others not support!\n" );
+        exit( -1 );
+      }
     }
     // 在父进程中.
     else if ( 0 < pid ) {
@@ -202,9 +212,8 @@ static void parse_conf_file( void ) {
   // 是否daemon运行
   daemonize  = conf_daemonize->valueint; 
   // 事件模型
-  //char * temp_event = ( char * )malloc( sizeof( conf_event->valuestring ) );
-  //strcpy( event, temp_event );
-  //printf( "%s\n", event );
+  event = ( char * )malloc( sizeof( conf_event->valuestring ) );
+  strcpy( event, conf_event->valuestring );
   free( worker_dir );
   free( full_conf_file );
   free( conf_content );
