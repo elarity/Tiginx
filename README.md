@@ -1,5 +1,11 @@
 # Tiginx
-Tiginx is a Shanzhai Nginx project , please buyao use it xian , if meet problem , I no fuze ...
+Tiginx is a Shanzhai Nginx project , please buyao use it xian , if meet problem , I no fuze ... 
+You may ask me WHY you make luzni repeatly , because I want , it is none of your business ...
+Actually Tiginx is a very good project for learn CLanguage , you can do something with 《APUE》！
+
+# 特性
+- 代码烂
+- 风格差
 
 # 编译方法（ 二）
 ```shell
