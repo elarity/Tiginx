@@ -1,6 +1,8 @@
 #include "../core/main.h"
 #include "epoll.h"
 #define MAX_EPOLL_EVENT_SIZE 10
+#define MAX_BUFFER_SIZE 1024
+
 void epoll_loop( int );
 
 void epoll_loop( int listen_socket_fd ) {
@@ -13,7 +15,7 @@ void epoll_loop( int listen_socket_fd ) {
   struct epoll_event ev_struct;  
   struct epoll_event ev_array[ MAX_EPOLL_EVENT_SIZE ];
   struct sockaddr_in connect_sockaddr_struct;
-  char buffer[ 1024 ];
+  char buffer[ MAX_BUFFER_SIZE ];
   // 开始创建epoll并将listen-socket-fd添加到epoll内核事件表
   ev_struct.data.fd = listen_socket_fd;
   ev_struct.events  = EPOLLIN | EPOLLET;
@@ -30,7 +32,6 @@ void epoll_loop( int listen_socket_fd ) {
     if ( 0 == affected_epoll_fd ) {
       continue;
     }
-    sleep( 1 );
     for ( int i = 0; i < MAX_EPOLL_EVENT_SIZE; i++ ) {
       _temp_fd = ev_array[ i ].data.fd; 
       if ( listen_socket_fd == _temp_fd ) {
@@ -43,8 +44,8 @@ void epoll_loop( int listen_socket_fd ) {
       }
       else {
         //printf( "recv\n" );
-        memset( buffer, '\0', 1024 );
-        recv( _temp_fd, buffer, 1024, 0 );  
+        memset( buffer, '\0', MAX_BUFFER_SIZE );
+        recv( _temp_fd, buffer, MAX_BUFFER_SIZE, 0 );  
         printf( "%s", buffer );
       }
     }
