@@ -3,6 +3,7 @@
 
 void select_loop( int listen_socket_fd ) {
   // 声明select相关变量
+  int i;
   fd_set temp_fd;
   fd_set read_fd; 
   int affected_fd_num;
@@ -44,7 +45,7 @@ void select_loop( int listen_socket_fd ) {
 	socket_length = sizeof( connect_socket_addr );
 	connect_socket_fd = accept( listen_socket_fd, ( struct sockaddr * )&connect_socket_addr, &socket_length );
  	FD_SET( connect_socket_fd, &read_fd );
-	for ( int i = 0; i < MAX_FD_SIZE; i++ ) {
+	for ( i = 0; i < MAX_FD_SIZE; i++ ) {
 	  if ( -1 == client_array[ i ] ) {
 	    if ( i <= ( MAX_FD_SIZE - 1 ) ) {
               printf( "accept : %d\n", i );
@@ -59,7 +60,7 @@ void select_loop( int listen_socket_fd ) {
       else {
         printf( "recv read.\n" );
         // 先用傻逼轮训办法读取
- 	for ( int i = 0; i < MAX_FD_SIZE; i++ ) {
+ 	for ( i = 0; i < MAX_FD_SIZE; i++ ) {
 	  connect_socket_fd = client_array[ i ];
  	  if ( 0 < connect_socket_fd && FD_ISSET( connect_socket_fd, &temp_fd ) ) {
 	    recv( connect_socket_fd, buffer, MAXBUFFER, 0 );	
