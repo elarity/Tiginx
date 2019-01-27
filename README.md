@@ -9,10 +9,8 @@
 - 代码烂
 - 风格差
 
-# 编译方法（ 二）
-```shell
-gcc main.c src/core/cJSON.c src/event/select.c 
-```
+# FINDME
+https://t.ti-node.com/
 
 # TODO
 ### 下一步：
