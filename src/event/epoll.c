@@ -7,6 +7,7 @@ void epoll_loop( int );
 
 void epoll_loop( int listen_socket_fd ) {
   // 指向epoll内核事件表的fd
+  int i;
   int epoll_fd;
   int _temp_fd;
   int connect_socket_fd;
@@ -22,7 +23,7 @@ void epoll_loop( int listen_socket_fd ) {
   epoll_fd = epoll_create1( 0 ); 
   epoll_ctl( epoll_fd, EPOLL_CTL_ADD, listen_socket_fd, &ev_struct ); 
   // 进入无限循环
-  for ( ; ; ) {
+  while ( 1 ) {
     affected_epoll_fd = epoll_wait( epoll_fd, ev_array, MAX_EPOLL_EVENT_SIZE, -1 ); 
     //printf( "%d\n", affected_epoll_fd ); 
     if ( 0 > affected_epoll_fd ) {
@@ -32,7 +33,7 @@ void epoll_loop( int listen_socket_fd ) {
     if ( 0 == affected_epoll_fd ) {
       continue;
     }
-    for ( int i = 0; i < MAX_EPOLL_EVENT_SIZE; i++ ) {
+    for ( i = 0; i < MAX_EPOLL_EVENT_SIZE; i++ ) {
       _temp_fd = ev_array[ i ].data.fd; 
       if ( listen_socket_fd == _temp_fd ) {
         //printf( "accept\n" );

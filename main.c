@@ -25,6 +25,7 @@ int main( int argc, char * argv[] ) {
   char * process_title = argv[ 0 ];
   
   // 声明信号以及子进程相关变量和结构体
+  int i;
   pid_t pid;
   pid_t * child_pid;
   struct sigaction sa_struct;
@@ -69,7 +70,7 @@ int main( int argc, char * argv[] ) {
   } 
  
   // fork子进程
-  for ( int i = 0; i < worker_num; i++ ) {
+  for ( i = 0; i < worker_num; i++ ) {
     pid = fork(); 
     // fork error.
     if ( 0 > pid ) {
