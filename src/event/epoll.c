@@ -39,6 +39,7 @@ void epoll_loop( int listen_socket_fd ) {
         //printf( "accept\n" );
         struct_length = sizeof( connect_sockaddr_struct );
         connect_socket_fd = accept( listen_socket_fd, ( struct sockaddr * )&connect_sockaddr_struct, &struct_length );  
+        fcntl( connect_socket_fd, F_SETFL, O_NONBLOCK );
         ev_struct.data.fd = connect_socket_fd;
         ev_struct.events  = EPOLLIN | EPOLLET;
         epoll_ctl( epoll_fd, EPOLL_CTL_ADD, connect_socket_fd, &ev_struct );  

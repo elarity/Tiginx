@@ -1,18 +1,22 @@
 #include "src/core/main.h"
 
 // 定义信号处理函数
-void signal_handler( int );
+static void signal_handler( int );
 // 定义处理进程名称的函数
 void set_process_title();
 // daemonize函数
-void be_daemon();
+static void be_daemon();
 // 配置文件解析函数
 static void parse_conf_file( void );
+// 创建listen socket
+int create_listen_socket( void );
 // select-loop
 void select_loop( int );
 extern void epoll_loop( int );
+// fork进程
+static void fork_process( void );
 
-// 子进程数量
+// 配置项的变量，暂时全局化
 int worker_num = 4;
 int port       = 6666;
 int daemonize  = 0;
@@ -31,43 +35,23 @@ int main( int argc, char * argv[] ) {
   struct sigaction sa_struct;
   sa_struct.sa_flags   = SA_RESTART;
   sa_struct.sa_handler = signal_handler;
-  //  声明socket相关变量 和 结构体
-  int listen_socket_fd; 
-  int socket_option_value;
-  struct sockaddr_in listen_socket_addr;
 
   // 解析json配置文件
   parse_conf_file();
-
-  child_pid = (pid_t *)malloc(sizeof(pid_t) * worker_num);
-  if (child_pid == NULL) {
-    printf("malloc error\n");
+  child_pid = ( pid_t * )malloc( sizeof( pid_t ) * worker_num );
+  if ( child_pid == NULL ) {
+    printf( "malloc error\n" );
     exit( -1 );
   }
-     
   if ( 1 == daemonize ) {
     be_daemon();
   }
-  // 创建监听socket  
-  listen_socket_fd = socket( AF_INET, SOCK_STREAM, 0 );
-  if ( -1 == listen_socket_fd ) {
-    printf( "create listen socket error.\n" );
-    exit( -1 );
-  }
-  socket_option_value = 1;
-  setsockopt( listen_socket_fd, SOL_SOCKET, SO_REUSEADDR, &socket_option_value, sizeof( int ) );
-  memset( &listen_socket_addr, 0, sizeof( struct sockaddr_in ) );
-  listen_socket_addr.sin_family = AF_INET; 
-  listen_socket_addr.sin_port   = htons( port ); 
-  listen_socket_addr.sin_addr.s_addr = htonl( INADDR_ANY );
-  if ( -1 == bind( listen_socket_fd, ( struct sockaddr * )&listen_socket_addr, sizeof( listen_socket_addr ) ) ) {
-    printf( "bind socket error.\n" );
-    exit( -1 );
-  }
-  if ( -1 == listen( listen_socket_fd, 128 ) ) {
-    printf( "listen socket error.\n" );
-    exit( -1 );
-  } 
+
+  // 创建listen socket
+  int listen_socket_fd = create_listen_socket();
+
+  // fork进程
+  //fork_process();
  
   // fork子进程
   for ( i = 0; i < worker_num; i++ ) {
@@ -105,6 +89,9 @@ int main( int argc, char * argv[] ) {
   return 0;
 }
 
+/*
+ * @desc : 给主进程安装信号处理器
+ */
 void signal_handler( int signal ) {
   // 子进程exit时候，内核会给父进程发送SIGCHLD信号，主进程回收子进程
   if ( SIGCHLD == signal ) {
@@ -241,4 +228,45 @@ static void parse_conf_file( void ) {
   free( conf_content );
   free( conf_content_root );
   fclose( conf_file_fp );
+}
+
+/*
+ * @desc : 创建listen-socket-fd
+ * @return : 返回listen-socket-fd
+ */
+int create_listen_socket( void ) {
+  //  声明socket相关变量 和 结构体
+  int listen_socket_fd; 
+  int socket_option_value;
+  struct sockaddr_in listen_socket_addr;
+  // 创建监听socket  
+  listen_socket_fd = socket( AF_INET, SOCK_STREAM, 0 );
+  if ( -1 == listen_socket_fd ) {
+    printf( "create listen socket error.\n" );
+    exit( -1 );
+  }
+  // 避免出现address already in use的情况
+  socket_option_value = 1;
+  setsockopt( listen_socket_fd, SOL_SOCKET, SO_REUSEADDR, &socket_option_value, sizeof( int ) );
+  // 将listen_socket_fd设置为非阻塞 
+  fcntl( listen_socket_fd, F_SETFL, O_NONBLOCK );     
+  memset( &listen_socket_addr, 0, sizeof( struct sockaddr_in ) );
+  listen_socket_addr.sin_family = AF_INET; 
+  listen_socket_addr.sin_port   = htons( port ); 
+  listen_socket_addr.sin_addr.s_addr = htonl( INADDR_ANY );
+  if ( -1 == bind( listen_socket_fd, ( struct sockaddr * )&listen_socket_addr, sizeof( listen_socket_addr ) ) ) {
+    printf( "bind socket error.\n" );
+    exit( -1 );
+  }
+  if ( -1 == listen( listen_socket_fd, 128 ) ) {
+    printf( "listen socket error.\n" );
+    exit( -1 );
+  } 
+  return listen_socket_fd;
+}
+
+/*
+ * @desc : fork出子进程  
+ */
+void fork_process( void ) {
 }

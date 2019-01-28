@@ -44,6 +44,7 @@ void select_loop( int listen_socket_fd ) {
         //printf( "accept connect.\n" );
 	socket_length = sizeof( connect_socket_addr );
 	connect_socket_fd = accept( listen_socket_fd, ( struct sockaddr * )&connect_socket_addr, &socket_length );
+        fcntl( connect_socket_fd, F_SETFL, O_NONBLOCK );
  	FD_SET( connect_socket_fd, &read_fd );
 	for ( i = 0; i < MAX_FD_SIZE; i++ ) {
 	  if ( -1 == client_array[ i ] ) {
