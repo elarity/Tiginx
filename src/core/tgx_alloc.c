@@ -1,8 +1,9 @@
-#ifndef H_G_ALLOC
-#define H_G_ALLOC
 #include "tgx_alloc.h"
-#endif
 
-void * tgx_alloc( size_t );
- 
-void tgx_free( void * );
+void * tgx_alloc( size_t length ) {
+  return malloc( length );  
+}
+
+void tgx_free( void * pointer ) {
+  free( pointer );
+}

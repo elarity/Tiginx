@@ -1,30 +1,15 @@
 #include "src/core/main.h"
-
-// 定义信号处理函数
-static void signal_handler( int );
-// 定义处理进程名称的函数
-void set_process_title();
-// daemonize函数
-static void be_daemon();
-// 配置文件解析函数
-static void parse_conf_file( void );
-// 创建listen socket
-int create_listen_socket( void );
-// select-loop
-void select_loop( int );
-extern void epoll_loop( int );
-// fork进程
-static void fork_process( void );
+#include "src/core/cJSON.h"
+#include "src/event/select.h"
+#include "src/event/epoll.h"
 
 // 配置项的变量，暂时全局化
-int worker_num = 4;
-int port       = 6666;
-int daemonize  = 0;
-char * event;
+tgx_config_t * config_struct;
 
 // 环境变量数组 
-extern char ** environ;
+//extern char ** environ;
 
+// 全局入口文件，粗暴理解为mvc框架中的index.php
 int main( int argc, char * argv[] ) {
   char * process_title = argv[ 0 ];
   
@@ -36,14 +21,16 @@ int main( int argc, char * argv[] ) {
   sa_struct.sa_flags   = SA_RESTART;
   sa_struct.sa_handler = signal_handler;
 
+  // 初始化默认配置
+  init_default_config();
   // 解析json配置文件
   parse_conf_file();
-  child_pid = ( pid_t * )malloc( sizeof( pid_t ) * worker_num );
+  child_pid = ( pid_t * )malloc( sizeof( pid_t ) * config_struct->worker_num );
   if ( child_pid == NULL ) {
     printf( "malloc error\n" );
     exit( -1 );
   }
-  if ( 1 == daemonize ) {
+  if ( 1 == config_struct->daemonize ) {
     be_daemon();
   }
 
@@ -54,7 +41,7 @@ int main( int argc, char * argv[] ) {
   //fork_process();
  
   // fork子进程
-  for ( i = 0; i < worker_num; i++ ) {
+  for ( i = 0; i < config_struct->worker_num; i++ ) {
     pid = fork(); 
     // fork error.
     if ( 0 > pid ) {
@@ -63,10 +50,10 @@ int main( int argc, char * argv[] ) {
     }
     // 在子进程中.
     else if ( 0 == pid ) {
-      if ( 0 == strcmp( "select", event ) ) {
+      if ( 0 == strcmp( "select", config_struct->event ) ) {
         select_loop( listen_socket_fd );
       }
-      else if ( 0 == strcmp( "epoll", event ) ) {
+      else if ( 0 == strcmp( "epoll", config_struct->event ) ) {
         epoll_loop( listen_socket_fd );
       }
       else {
@@ -157,7 +144,7 @@ void be_daemon() {
 /*
  * @desc : 解析json配置文件的函数
  */
-static void parse_conf_file( void ) {
+void parse_conf_file( void ) {
   // 声明配置文件路径
   int  file_size;  // bytes
   FILE * conf_file_fp;
@@ -192,13 +179,13 @@ static void parse_conf_file( void ) {
   }
   fseek( conf_file_fp, 0, SEEK_END ); 
   file_size = ftell( conf_file_fp );
-  if (file_size == -1) {
+  if ( -1 == file_size ) {
     printf("ftell error\n");
     exit(-1);
   }
   rewind( conf_file_fp );
   conf_content = ( char * )malloc( file_size );   
-  if (conf_content == NULL) {
+  if ( NULL == conf_content ) {
     printf("malloc error\n");
     exit(-1);
   }
@@ -210,24 +197,42 @@ static void parse_conf_file( void ) {
   conf_daemonize  = cJSON_GetObjectItem( conf_content_root, "daemonize" );
   conf_event      = cJSON_GetObjectItem( conf_content_root, "event" );
   // 端口
-  port       = conf_port->valueint;
+  config_struct->port       = conf_port->valueint;
   // 子进程数量
-  worker_num = conf_worker_num->valueint;
+  config_struct->worker_num = conf_worker_num->valueint;
   // 是否daemon运行
-  daemonize  = conf_daemonize->valueint; 
+  config_struct->daemonize  = conf_daemonize->valueint; 
   // 事件模型
-  event = ( char * )malloc( sizeof( conf_event->valuestring ) );
-  if (event == NULL) {
+  config_struct->event = ( char * )malloc( sizeof( conf_event->valuestring ) );
+  if ( NULL == config_struct->event ) {
     printf("malloc error\n");
     exit( -1 );
   }
-  bzero( event, sizeof( conf_event->valuestring ));
-  strcpy( event, conf_event->valuestring );
+  // bzero和memset都可以用，bzero并不是ANSI C标准，不过很多linux都具备这个函数，unp也推荐使用bzero
+  bzero( config_struct->event, sizeof( conf_event->valuestring ));
+  strcpy( config_struct->event, conf_event->valuestring );
   free( worker_dir );
   free( full_conf_file );
   free( conf_content );
   free( conf_content_root );
   fclose( conf_file_fp );
+}
+
+/*
+ * @desc : 初始化默认配置
+ * @tip  : 原来这个函数原型为init_default_config( tgx_config_t * )，但是这样有一个问题就是函数里的这个结构体指针变量会变成局部变量
+ *         虽然分配了内存，也赋值了，但是回头变量会被释放掉；如果用下面这种，该指针变量将会成为全局变量，反而不会有问题
+ */
+void init_default_config() {
+  config_struct = ( tgx_config_t * )malloc( sizeof( tgx_config_t ) );  
+  config_struct->worker_num = 4;
+  config_struct->port       = 6666;
+  config_struct->daemonize  = 0;
+  // 分配字符串需要注意，需要申请内存
+  char * _event_char   = ( char * )malloc( sizeof( "epoll" ) );
+  bzero( _event_char, sizeof( _event_char ) );
+  strcpy( _event_char, "epoll" );
+  config_struct->event = _event_char;
 }
 
 /*
@@ -252,7 +257,7 @@ int create_listen_socket( void ) {
   fcntl( listen_socket_fd, F_SETFL, O_NONBLOCK );     
   memset( &listen_socket_addr, 0, sizeof( struct sockaddr_in ) );
   listen_socket_addr.sin_family = AF_INET; 
-  listen_socket_addr.sin_port   = htons( port ); 
+  listen_socket_addr.sin_port   = htons( config_struct->port ); 
   listen_socket_addr.sin_addr.s_addr = htonl( INADDR_ANY );
   if ( -1 == bind( listen_socket_fd, ( struct sockaddr * )&listen_socket_addr, sizeof( listen_socket_addr ) ) ) {
     printf( "bind socket error.\n" );
@@ -264,6 +269,7 @@ int create_listen_socket( void ) {
   } 
   return listen_socket_fd;
 }
+
 
 /*
  * @desc : fork出子进程  

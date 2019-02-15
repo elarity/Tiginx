@@ -1,9 +1,5 @@
 #include "main.h"
 
-void * tgx_alloc( size_t length ) {
-  return malloc( length );  
-}
-
-void tgx_free( void * pointer ) {
-  free( pointer );
-}
+void * tgx_alloc( size_t );
+ 
+void tgx_free( void * );

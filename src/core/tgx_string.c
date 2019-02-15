@@ -28,10 +28,18 @@ size_t tgx_strlen( const tgx_string_t * tgx_string_t ) {
 
 // 拼接字符串
 void tgx_strcat( tgx_string_t * dest, tgx_string_t * src ) {
+  // 保存原来tgx字符串struct中原来的字符串指针
+  char * _temp = dest->str; 
+  // 申请内存
   char * temp = ( char * )tgx_alloc( sizeof( dest->str ) + sizeof( src->str ) );  
+  bzero( temp, sizeof( temp ) );
+  strcpy( temp, dest->str );
+  strcpy( temp, src->str );
+  // 将指针指向tgx字符串结构体
   dest->str    = temp;  
   dest->length = strlen( dest->str ) + strlen( src->str );
-  tgx_free( dest->str ); 
+  // 释放原来内存
+  tgx_free( _temp ); 
   tgx_free( src->str ); 
   tgx_free( src );
 }
